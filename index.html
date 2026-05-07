@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>回忆树</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #f0ede6;
+      --card: #faf8f4;
+      --text: #2d2926;
+      --text-light: #9e9a94;
+      --accent: #7a8f6a;
+      --accent-light: #96a986;
+      --earth: #5c4a3a;
+      --shadow: 0 2px 14px rgba(45,41,38,0.06);
+      --shadow-hover: 0 6px 28px rgba(45,41,38,0.1);
+      --radius: 18px;
+    }
+
+    body {
+      font-family: "Noto Sans SC", "PingFang SC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== INTRO ===== */
+    .intro-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0d0f1a;
+      overflow: hidden;
+      transition: opacity 1.8s cubic-bezier(0.22,1,0.36,1), visibility 1.8s;
+    }
+    .intro-screen.exiting { opacity: 0; visibility: hidden; pointer-events: none; }
+    .intro-screen::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 25% 35%, rgba(55,45,80,0.3) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 75% 25%, rgba(35,55,75,0.25) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 50% 75%, rgba(45,35,55,0.18) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .stars { position: absolute; inset: 0; pointer-events: none; }
+    .star {
+      position: absolute;
+      background: rgba(255,255,255,0.55);
+      border-radius: 50%;
+      animation: twinkle 5s ease-in-out infinite alternate;
+    }
+    @keyframes twinkle { from { opacity: 0.15; } to { opacity: 0.85; } }
+
+    .intro-content {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      max-width: 700px;
+      padding: 0 40px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .intro-line {
+      font-family: "Noto Serif SC", "Songti SC", serif;
+      font-size: clamp(17px, 2.8vw, 24px);
+      font-weight: 300;
+      color: rgba(255,255,255,0.8);
+      line-height: 2.2;
+      letter-spacing: 5px;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity 1s ease, transform 1s cubic-bezier(0.22,1,0.36,1);
+      position: absolute;
+      width: 100%;
+      padding: 0 20px;
+      pointer-events: none;
+    }
+    .intro-line.visible {
+      opacity: 1;
+      transform: translateY(0);
+      position: relative;
+      pointer-events: auto;
+    }
+    .intro-line .days-num {
+      font-family: "Noto Serif SC", serif;
+      font-weight: 600;
+      color: rgba(255,255,255,0.95);
+      font-size: 1.25em;
+      letter-spacing: 2px;
+    }
+    .intro-hint {
+      position: absolute;
+      bottom: -56px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      letter-spacing: 4px;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      animation: hintPulse 3s ease-in-out infinite;
+      white-space: nowrap;
+    }
+    .intro-hint.show { opacity: 1; }
+    @keyframes hintPulse { 0%,100%{opacity:0.2;} 50%{opacity:0.45;} }
+
+    .btn-start {
+      margin-top: 44px;
+      padding: 13px 40px;
+      font-family: "Noto Serif SC", serif;
+      font-size: 14px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.85);
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 1s cubic-bezier(0.22,1,0.36,1), border-color 0.3s, background 0.3s;
+      letter-spacing: 4px;
+    }
+    .btn-start.visible { opacity: 1; transform: translateY(0); }
+    .btn-start:hover { border-color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.04); }
+    .btn-start:active { transform: scale(0.97); }
+
+    /* ===== MAIN ===== */
+    .main-screen {
+      min-height: 100vh;
+      display: none;
+      background: var(--bg);
+    }
+    .main-screen.active { display: block; animation: mainFadeIn 1.2s ease; }
+    @keyframes mainFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .main-header {
+      text-align: center;
+      padding: 36px 20px 16px;
+    }
+    .main-header h1 {
+      font-family: "Noto Serif SC", serif;
+      font-size: clamp(20px, 2.8vw, 28px);
+      color: var(--earth);
+      letter-spacing: 10px;
+      font-weight: 300;
+    }
+    .main-header .subtitle {
+      color: var(--text-light);
+      font-size: 12px;
+      margin-top: 10px;
+      letter-spacing: 3px;
+      font-weight: 300;
+    }
+
+    .main-layout {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 8px 24px 48px;
+      gap: 28px;
+      align-items: flex-start;
+    }
+
+    /* Left */
+    .left-panel {
+      flex: 0 0 170px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: sticky;
+      top: 24px;
+    }
+    .stat-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 18px 12px;
+      text-align: center;
+      box-shadow: var(--shadow);
+      transition: transform 0.4s cubic-bezier(0.22,1,0.36,1), box-shadow 0.4s;
+    }
+    .stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+    .stat-card .value {
+      font-family: "Noto Serif SC", serif;
+      font-size: 26px;
+      font-weight: 300;
+      color: var(--earth);
+      line-height: 1;
+      letter-spacing: 1px;
+    }
+    .stat-card .label {
+      font-size: 11px;
+      color: var(--text-light);
+      margin-top: 8px;
+      letter-spacing: 2px;
+      font-weight: 300;
+    }
+    .action-btn {
+      padding: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      letter-spacing: 1px;
+      color: #fff;
+    }
+    .action-btn:hover { transform: translateY(-2px); }
+    .action-btn:active { transform: scale(0.97); }
+    .btn-water {
+      background: linear-gradient(135deg, #7a9e7e, #5d8a63);
+      box-shadow: 0 4px 14px rgba(93,138,99,0.2);
+    }
+    .btn-shake-tree {
+      background: linear-gradient(135deg, #c4a97a, #b5986a);
+      box-shadow: 0 4px 14px rgba(181,152,106,0.2);
+    }
+
+    /* Center Tree */
+    .tree-panel { flex: 1; min-width: 0; display: flex; justify-content: center; }
+    .tree-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      aspect-ratio: 1 / 1.15;
+    }
+    .tree-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .leaf-group {
+      cursor: pointer;
+      transform-origin: center bottom;
+      transition: filter 0.35s cubic-bezier(0.22,1,0.36,1);
+    }
+    .leaf-group .leaf-scale-wrap {
+      transition: transform 0.35s cubic-bezier(0.22,1,0.36,1);
+      transform-origin: center bottom;
+    }
+    .leaf-group:hover .leaf-scale-wrap { transform: scale(1.35); }
+    .leaf-group:hover .leaf-path { filter: brightness(1.12) saturate(1.2); }
+
+    .leaf-path {
+      transition: fill 0.8s ease, filter 0.35s;
+    }
+
+    /* Tooltip */
+    .tree-tooltip {
+      position: absolute;
+      background: rgba(45,41,38,0.88);
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 50;
+      max-width: 180px;
+      line-height: 1.5;
+      letter-spacing: 0.5px;
+    }
+    .tree-tooltip.show { opacity: 1; transform: translateY(0); }
+    .tree-tooltip::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 5px 5px 0;
+      border-style: solid;
+      border-color: rgba(45,41,38,0.88) transparent transparent;
+    }
+
+    /* Right Panel */
+    .right-panel {
+      flex: 0 0 270px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: sticky;
+      top: 24px;
+    }
+    .panel-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .panel-card h3 {
+      font-family: "Noto Serif SC", serif;
+      font-size: 13px;
+      color: var(--earth);
+      margin-bottom: 14px;
+      font-weight: 400;
+      letter-spacing: 2px;
+    }
+    .btn-upload {
+      width: 100%;
+      padding: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(107,124,94,0.18);
+      transition: all 0.25s;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-upload:hover { background: var(--accent-light); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(107,124,94,0.24); }
+    .btn-upload:active { transform: scale(0.97); }
+
+    .memory-list {
+      max-height: 360px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .memory-list::-webkit-scrollbar { width: 3px; }
+    .memory-list::-webkit-scrollbar-thumb { background: rgba(158,154,148,0.18); border-radius: 4px; }
+
+    .memory-item {
+      background: #f5f2ec;
+      border-radius: 14px;
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
+      animation: popInItem 0.45s cubic-bezier(0.22,1,0.36,1);
+      border: 1px solid transparent;
+    }
+    @keyframes popInItem {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .memory-item:hover {
+      background: var(--card);
+      border-color: rgba(122,143,106,0.12);
+      box-shadow: var(--shadow);
+      transform: translateX(4px);
+    }
+    .memory-item .preview, .memory-item .preview-video {
+      width: 100%;
+      height: 76px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: #e0ddd6;
+    }
+    .memory-item .text {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.6;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      letter-spacing: 0.3px;
+    }
+    .memory-item .meta {
+      font-size: 10px;
+      color: var(--text-light);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 9px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(122,143,106,0.08);
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,15,18,0.3);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    .modal-overlay.show { display: flex; opacity: 1; }
+    .modal-box {
+      background: var(--card);
+      border-radius: 22px;
+      padding: 30px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.1);
+      transform: translateY(16px) scale(0.98);
+      transition: transform 0.45s cubic-bezier(0.22,1,0.36,1);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-overlay.show .modal-box { transform: translateY(0) scale(1); }
+    .modal-box h3 {
+      font-family: "Noto Serif SC", serif;
+      font-size: 17px;
+      color: var(--earth);
+      margin-bottom: 18px;
+      font-weight: 400;
+      letter-spacing: 3px;
+    }
+    .modal-box input[type="text"], .modal-box textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #ddd8d0;
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      margin-bottom: 12px;
+      background: #f5f2ec;
+      transition: border-color 0.3s, box-shadow 0.3s;
+      letter-spacing: 0.5px;
+    }
+    .modal-box input:focus, .modal-box textarea:focus {
+      border-color: var(--accent-light);
+      box-shadow: 0 0 0 3px rgba(122,143,106,0.08);
+    }
+    .modal-box textarea { min-height: 90px; resize: vertical; line-height: 1.7; }
+    .file-area {
+      border: 1.5px dashed #d5d0c8;
+      border-radius: 14px;
+      padding: 22px;
+      text-align: center;
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      background: #f5f2ec;
+    }
+    .file-area:hover { border-color: var(--accent-light); background: rgba(122,143,106,0.04); }
+    .file-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .file-preview { margin-top: 10px; max-height: 140px; border-radius: 10px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+    .modal-actions button {
+      padding: 10px 22px;
+      border-radius: 10px;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+    .modal-actions button:active { transform: scale(0.96); }
+    .btn-cancel { background: #ebe6de; color: var(--text-light); }
+    .btn-cancel:hover { background: #e0dbd3; }
+    .btn-confirm { background: var(--accent); color: #fff; }
+    .btn-confirm:hover { background: var(--accent-light); }
+
+    .detail-media { width: 100%; max-height: 260px; object-fit: contain; border-radius: 16px; margin-bottom: 16px; background: #ebe6de; }
+    .detail-text { font-size: 14px; line-height: 1.85; color: var(--text); white-space: pre-wrap; letter-spacing: 0.5px; }
+    .detail-date { font-size: 11px; color: var(--text-light); margin-top: 12px; letter-spacing: 1px; }
+
+    /* Particles */
+    .particle { position: absolute; pointer-events: none; z-index: 20; }
+    .drop-p {
+      width: 6px;
+      height: 9px;
+      background: linear-gradient(180deg, rgba(122,158,126,0.65), rgba(93,138,99,0.35));
+      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+      animation: dropFall 1.4s ease-in forwards;
+    }
+    @keyframes dropFall {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(320px) scale(0.35); }
+    }
+    .glow-p {
+      width: 3px;
+      height: 3px;
+      background: rgba(255,230,150,0.75);
+      border-radius: 50%;
+      animation: glowRise 1s ease-out forwards;
+      box-shadow: 0 0 5px rgba(255,230,150,0.4);
+    }
+    @keyframes glowRise {
+      0% { opacity: 1; transform: translate(0,0) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); }
+    }
+
+    .falling-leaf {
+      position: fixed;
+      pointer-events: none;
+      z-index: 300;
+      filter: drop-shadow(0 3px 8px rgba(0,0,0,0.12));
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .main-layout { flex-direction: column; align-items: stretch; }
+      .left-panel, .right-panel { flex: 1 1 auto; position: static; flex-direction: row; flex-wrap: wrap; }
+      .stat-card { flex: 1; min-width: 90px; padding: 14px 10px; }
+      .stat-card .value { font-size: 20px; }
+      .action-btn { flex: 1; }
+      .tree-wrap { max-width: 100%; }
+    }
+    @media (max-width: 560px) {
+      .intro-line { letter-spacing: 2px; }
+      .main-layout { padding: 8px 16px 32px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== INTRO ===== -->
+<section class="intro-screen" id="introScreen">
+  <div class="stars" id="starsBox"></div>
+  <div class="intro-content" id="introContent">
+    <div class="intro-line visible" data-idx="0">
+      世界这么大，这么多人，我们冥冥之中相遇，
+    </div>
+    <div class="intro-line" data-idx="1">
+      已经一起走过 <span class="days-num" id="daysNum">0</span> 天，
+    </div>
+    <div class="intro-line" data-idx="2">
+      每一天，都是独一无二的礼物。
+    </div>
+    <div class="intro-line" data-idx="3" style="font-size: 13px; color: rgba(255,255,255,0.38); margin-top: 16px; letter-spacing: 4px;">
+      —— 种下我们的回忆树
+    </div>
+    <button class="btn-start" id="btnStart">开启我们的回忆树</button>
+    <div class="intro-hint show" id="introHint">点击屏幕继续</div>
+  </div>
+</section>
+
+<!-- ===== MAIN ===== -->
+<main class="main-screen" id="mainScreen">
+  <header class="main-header">
+    <h1>回忆树</h1>
+    <div class="subtitle">每一片叶子，都是一段珍贵的回忆</div>
+  </header>
+
+  <div class="main-layout">
+    <!-- Left -->
+    <aside class="left-panel">
+      <div class="stat-card">
+        <div class="value" id="statDays">0</div>
+        <div class="label">总天数</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="statMemories">0</div>
+        <div class="label">回忆数量</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="statWater">0</div>
+        <div class="label">浇水次数</div>
+      </div>
+      <button class="action-btn btn-water" id="btnWater">浇水</button>
+      <button class="action-btn btn-shake-tree" id="btnShake">摇一摇</button>
+    </aside>
+
+    <!-- Center -->
+    <div class="tree-panel">
+      <div class="tree-wrap" id="treeWrap">
+        <div class="tree-tooltip" id="treeTooltip"></div>
+        <svg class="tree-svg" id="treeSvg" viewBox="0 0 500 560" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="trunkGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" style="stop-color:#4a3528"/>
+              <stop offset="40%" style="stop-color:#6b5040"/>
+              <stop offset="100%" style="stop-color:#5a4032"/>
+            </linearGradient>
+            <linearGradient id="trunkGradLight" x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" style="stop-color:#5a4335"/>
+              <stop offset="50%" style="stop-color:#7a6050"/>
+              <stop offset="100%" style="stop-color:#6b5040"/>
+            </linearGradient>
+            <filter id="leafShadow" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0.5" dy="2" stdDeviation="1.5" flood-color="#3a2e24" flood-opacity="0.12"/>
+            </filter>
+          </defs>
+
+          <!-- Ground shadow -->
+          <ellipse cx="250" cy="540" rx="80" ry="12" fill="#d5cfc5" opacity="0.4"/>
+
+          <!-- Main trunk group -->
+          <g id="treeBody" transform-origin="250 540">
+            <!-- Main trunk -->
+            <path d="M225,540 Q232,460 235,400 Q238,340 242,290 Q245,240 250,200 Q255,240 258,290 Q262,340 265,400 Q268,460 275,540 Z"
+                  fill="url(#trunkGrad)"/>
+            <!-- Trunk highlight -->
+            <path d="M242,540 Q246,460 248,400 Q250,340 252,290 Q253,240 254,200 Q256,240 257,290 Q258,340 258,400 Q259,460 258,540 Z"
+                  fill="url(#trunkGradLight)" opacity="0.35"/>
+
+            <!-- Branches -->
+            <!-- Right branch -->
+            <path d="M250,320 Q285,290 320,260 Q340,245 355,235 Q345,255 325,275 Q290,305 255,335 Z"
+                  fill="url(#trunkGrad)"/>
+            <!-- Left branch -->
+            <path d="M248,280 Q210,250 175,225 Q155,212 140,202 Q155,220 180,240 Q215,270 250,295 Z"
+                  fill="url(#trunkGrad)"/>
+            <!-- Upper right -->
+            <path d="M252,240 Q285,215 320,195 Q335,186 345,180 Q330,195 305,215 Q275,235 255,255 Z"
+                  fill="url(#trunkGrad)"/>
+            <!-- Upper left -->
+            <path d="M248,220 Q218,195 185,172 Q170,162 160,155 Q178,172 205,195 Q235,215 252,235 Z"
+                  fill="url(#trunkGrad)"/>
+            <!-- Mid right -->
+            <path d="M255,360 Q285,340 310,325 Q320,320 325,318 Q315,330 295,345 Q275,358 258,370 Z"
+                  fill="url(#trunkGrad)"/>
+            <!-- Mid left -->
+            <path d="M245,350 Q220,330 195,315 Q185,310 180,308 Q192,320 210,332 Q230,345 248,355 Z"
+                  fill="url(#trunkGrad)"/>
+
+            <!-- Root bumps -->
+            <ellipse cx="220" cy="535" rx="30" ry="10" fill="#4a3528" opacity="0.7"/>
+            <ellipse cx="285" cy="538" rx="25" ry="8" fill="#3d2b20" opacity="0.6"/>
+          </g>
+
+          <!-- Canopy: all leaves -->
+          <g id="canopyGroup" transform-origin="250 250"></g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Right -->
+    <aside class="right-panel">
+      <div class="panel-card">
+        <h3>上传回忆</h3>
+        <button class="btn-upload" id="btnUpload">+ 记录一段回忆</button>
+      </div>
+      <div class="panel-card">
+        <h3>回忆列表</h3>
+        <div class="memory-list" id="memoryList">
+          <div style="text-align:center;color:#b5b0a8;padding:28px 0;font-size:12px;letter-spacing:1px;">还没有回忆，快去记录第一段吧</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<!-- ===== UPLOAD MODAL ===== -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal-box">
+    <h3>记录一段回忆</h3>
+    <input type="text" id="inputTitle" placeholder="给这段回忆起个标题（可选）">
+    <textarea id="inputContent" placeholder="写下你想记录的内容..."></textarea>
+    <div class="file-area" id="fileArea">
+      <input type="file" id="inputFile" accept="image/*,video/*">
+      <div style="font-size:24px;margin-bottom:6px;color:#b5b0a8;">📎</div>
+      <div style="font-size:12px;color:#b5b0a8;">点击或拖拽上传照片 / 视频</div>
+      <div id="filePreviewBox"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btnCancelUpload">取消</button>
+      <button class="btn-confirm" id="btnConfirmUpload">确认上传</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DETAIL MODAL ===== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box" id="detailBox">
+    <h3 id="detailTitle">回忆详情</h3>
+    <div id="detailMedia"></div>
+    <div class="detail-text" id="detailText"></div>
+    <div class="detail-date" id="detailDate"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-cancel" id="btnCloseDetail">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  /* ===== DATA ===== */
+  const START_DATE = new Date('2024-01-01');
+  let waterCount = 0;
+  let memories = [];
+  let nextId = 1;
+
+  function initDemo() {
+    addMemory({ title: '巴黎海边日落', content: '那天我们一起坐在海边，看着太阳一点点沉入海平面，天空被染成了橘红色。风吹过发梢，你说这就是幸福的模样。', type: 'text', date: '2025-06-15' });
+    addMemory({ title: '第一次做蛋糕', content: '虽然蛋糕歪歪扭扭的，奶油也涂得不均匀，但你吃得很开心。', type: 'photo', date: '2025-08-20' });
+    addMemory({ title: '山顶的日出', content: '凌晨四点爬起来爬山，虽然很累，但当第一缕阳光照在脸上的时候，一切都值得了。', type: 'video', date: '2025-10-02' });
+  }
+
+  /* ===== UTILS ===== */
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+  function randInt(min, max) { return Math.floor(rand(min, max)); }
+  function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
+  /* ===== COLOR SYSTEM: tree evolves with water ===== */
+  function getLeafColor(water, isMemory, memType) {
+    // Water progresses tree from pale yellow-green to deep emerald
+    const w = Math.min(water, 20) / 20; // 0 ~ 1
+    if (isMemory) {
+      const typeHue = { text: 100, photo: 130, video: 160 };
+      const baseH = typeHue[memType] || 100;
+      const h = baseH + w * 15;
+      const s = 35 + w * 25;
+      const l = 72 - w * 18;
+      return `hsl(${h}, ${s}%, ${l}%)`;
+    }
+    // Decoration leaves
+    const h = 85 + w * 25 + rand(-8, 8);
+    const s = 30 + w * 22 + rand(-5, 5);
+    const l = 78 - w * 16 + rand(-3, 3);
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  }
+
+  function getTrunkScale(water) {
+    // Cumulative: each watering adds ~2% height
+    const s = 1 + water * 0.018;
+    return Math.min(s, 1.5);
+  }
+
+  /* ===== INTRO ===== */
+  const introScreen = document.getElementById('introScreen');
+  const mainScreen = document.getElementById('mainScreen');
+  const introLines = document.querySelectorAll('.intro-line');
+  const btnStart = document.getElementById('btnStart');
+  const daysNumEl = document.getElementById('daysNum');
+
+  // Stars
+  const starsBox = document.getElementById('starsBox');
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = Math.random() * 70 + '%';
+    s.style.animationDelay = Math.random() * 5 + 's';
+    const size = Math.random() > 0.85 ? 2.5 : (Math.random() > 0.5 ? 1.5 : 1);
+    s.style.width = s.style.height = size + 'px';
+    starsBox.appendChild(s);
+  }
+
+  // Days counter
+  const totalDays = Math.floor((Date.now() - START_DATE.getTime()) / 86400000);
+  let shownDays = 0;
+  const dayTimer = setInterval(() => {
+    shownDays += Math.max(1, Math.floor((totalDays - shownDays) / 10));
+    if (shownDays >= totalDays) { shownDays = totalDays; clearInterval(dayTimer); }
+    daysNumEl.textContent = shownDays;
+  }, 100);
+
+  let currentLine = 0;
+  function showNextLine() {
+    if (currentLine >= introLines.length - 1) {
+      document.getElementById('introHint').classList.remove('show');
+      btnStart.classList.add('visible');
+      return;
+    }
+    currentLine++;
+    introLines[currentLine].classList.add('visible');
+    if (currentLine > 0) {
+      setTimeout(() => introLines[currentLine - 1].classList.remove('visible'), 400);
+    }
+  }
+  introScreen.addEventListener('click', () => {
+    if (btnStart.classList.contains('visible')) return;
+    showNextLine();
+  });
+  btnStart.addEventListener('click', (e) => {
+    e.stopPropagation();
+    introScreen.classList.add('exiting');
+    setTimeout(() => {
+      introScreen.style.display = 'none';
+      mainScreen.classList.add('active');
+      renderAll();
+    }, 1800);
+  });
+
+  /* ===== STATS ===== */
+  function updateStats() {
+    const days = Math.floor((Date.now() - START_DATE.getTime()) / 86400000);
+    document.getElementById('statDays').textContent = days;
+    document.getElementById('statMemories').textContent = memories.length;
+    document.getElementById('statWater').textContent = waterCount;
+  }
+
+  /* ===== TREE ===== */
+  const canopyGroup = document.getElementById('canopyGroup');
+  const treeBody = document.getElementById('treeBody');
+  const treeWrap = document.getElementById('treeWrap');
+  const treeSvg = document.getElementById('treeSvg');
+  const tooltip = document.getElementById('treeTooltip');
+  let leafElements = [];
+
+  // Elegant leaf shape
+  const LEAF_PATH = 'M0,0 C2.5,-7 4,-15 0,-24 C-4,-15 -2.5,-7 0,0';
+
+  function createLeaf(x, y, rotation, scale, isMemory, memType, memory) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'leaf-group');
+    // Outer group handles translation and rotation (sway), inner wrapper handles scale (hover)
+    g.setAttribute('transform', `translate(${x},${y}) rotate(${rotation})`);
+    g.style.opacity = '0';
+
+    const inner = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    inner.setAttribute('class', 'leaf-scale-wrap');
+    inner.setAttribute('transform', 'scale(0)');
+    g.appendChild(inner);
+
+    // Stem
+    const stem = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    stem.setAttribute('x1', 0); stem.setAttribute('y1', 0);
+    stem.setAttribute('x2', 0); stem.setAttribute('y2', 2);
+    stem.setAttribute('stroke', '#5c4a3a'); stem.setAttribute('stroke-width', '0.6');
+    stem.setAttribute('opacity', '0.4');
+    inner.appendChild(stem);
+
+    // Leaf blade
+    const leaf = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    leaf.setAttribute('d', LEAF_PATH);
+    leaf.setAttribute('fill', getLeafColor(waterCount, isMemory, memType));
+    leaf.setAttribute('filter', 'url(#leafShadow)');
+    leaf.setAttribute('class', 'leaf-path');
+    leaf.setAttribute('transform', `scale(${scale})`);
+    inner.appendChild(leaf);
+
+    // Memory marker: small dot or glow on memory leaves
+    if (isMemory) {
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      marker.setAttribute('cy', -12);
+      marker.setAttribute('r', 2);
+      marker.setAttribute('fill', '#fff');
+      marker.setAttribute('opacity', '0.6');
+      inner.appendChild(marker);
+    }
+
+    canopyGroup.appendChild(g);
+
+    // Grow in: fade + scale inner
+    requestAnimationFrame(() => {
+      g.style.transition = 'opacity 0.4s ease';
+      g.style.opacity = '1';
+      inner.style.transition = `transform ${0.5 + rand(0, 0.3)}s cubic-bezier(0.34,1.56,0.64,1)`;
+      inner.setAttribute('transform', `scale(1)`);
+    });
+
+    // Sway: only translate/rotate on outer group
+    const swayDur = rand(3.5, 6);
+    const swayDelay = rand(0, 4);
+    const swayAmp = rand(-2.5, 2.5);
+    const keyName = 'sway_' + Math.floor(Math.random() * 999999);
+    const style = document.createElement('style');
+    style.textContent = `@keyframes ${keyName} { 0%,100%{transform:translate(${x}px,${y}px) rotate(${rotation}deg);} 50%{transform:translate(${x}px,${y}px) rotate(${rotation + swayAmp}deg);} }`;
+    document.head.appendChild(style);
+    setTimeout(() => {
+      g.style.animation = `${keyName} ${swayDur}s ease-in-out infinite`;
+      g.style.animationDelay = `${swayDelay}s`;
+    }, 700);
+
+    // Events for memory leaves
+    if (isMemory && memory) {
+      g.addEventListener('mouseenter', () => {
+        const rect = g.getBoundingClientRect();
+        const cRect = treeWrap.getBoundingClientRect();
+        tooltip.textContent = memory.title || memory.content.slice(0, 20) + '...';
+        tooltip.classList.add('show');
+        tooltip.style.left = (rect.left - cRect.left + rect.width/2 - tooltip.offsetWidth/2) + 'px';
+        tooltip.style.top = (rect.top - cRect.top - tooltip.offsetHeight - 6) + 'px';
+      });
+      g.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+      g.addEventListener('click', () => openDetail(memory));
+    }
+
+    return { el: g, x, y, scale, rotation, styleEl: style, memory };
+  }
+
+  /* ===== BRANCH SYSTEM: leaves grow on branch tips ===== */
+  function prand(seed) {
+    const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  // Branch tips: where leaves actually grow on the tree
+  // Each branch has an anchor point (where it joins trunk/another branch)
+  // and a tip point (where leaves cluster)
+  const BRANCHES = [
+    { name: 'top',     tipX: 250, tipY: 198, angleBase: -90, len: 0 },
+    { name: 'ur',      tipX: 355, tipY: 235, angleBase:  30, len: 120 },
+    { name: 'ul',      tipX: 140, tipY: 202, angleBase: 150, len: 125 },
+    { name: 'uur',     tipX: 345, tipY: 180, angleBase:  20, len: 110 },
+    { name: 'uul',     tipX: 160, tipY: 155, angleBase: 160, len: 105 },
+    { name: 'mr',      tipX: 325, tipY: 318, angleBase:  15, len: 80 },
+    { name: 'ml',      tipX: 180, tipY: 308, angleBase: 165, len: 75 },
+  ];
+
+  // Given a global leaf index, assign it to a branch and compute its position
+  function branchLeafPos(globalIdx, seed) {
+    const branchIdx = globalIdx % BRANCHES.length;
+    const branch = BRANCHES[branchIdx];
+    const s = seed + globalIdx * 7.3;
+
+    // Cluster radius: leaves gather near the tip but with some natural spread
+    // Smaller branches get tighter clusters
+    const maxR = Math.min(22, branch.len * 0.35);
+    const clusterR = 4 + prand(s) * maxR;
+    const clusterA = (prand(s + 1) - 0.5) * 1.6; // spread angle
+
+    const x = branch.tipX + Math.cos(clusterA) * clusterR * 0.9;
+    const y = branch.tipY + Math.sin(clusterA) * clusterR * 0.6;
+
+    // Rotation: leaf points roughly outward from branch direction
+    const rot = branch.angleBase + (prand(s + 2) - 0.5) * 60;
+
+    return { x, y, rot };
+  }
+
+  function renderAll() {
+    // Clear
+    canopyGroup.innerHTML = '';
+    leafElements.forEach(l => l.styleEl && l.styleEl.remove());
+    leafElements = [];
+
+    // Tree body scale (cumulative growth)
+    const trunkScale = getTrunkScale(waterCount);
+    treeBody.style.transition = 'transform 0.8s cubic-bezier(0.22,1,0.36,1)';
+    treeBody.setAttribute('transform', `scale(1, ${trunkScale})`);
+
+    // Leaves = memories + decoration leaves from watering
+    const decorationCount = 18 + waterCount * 4;
+
+    // Build leaf data
+    const leafData = [];
+
+    // Memory leaves first: place them on the outer/larger branches for visibility
+    memories.forEach((mem, i) => {
+      const pos = branchLeafPos(i, 0);
+      leafData.push({ ...pos, scale: 0.85 + prand(i + 0.5) * 0.35, isMemory: true, memType: mem.type, memory: mem });
+    });
+
+    // Decoration leaves: fill all branches densely
+    for (let i = 0; i < decorationCount; i++) {
+      const pos = branchLeafPos(memories.length + i, 1000);
+      leafData.push({ ...pos, scale: 0.6 + prand(i + 1000.5) * 0.4, isMemory: false, memType: null, memory: null });
+    }
+
+    // Render
+    leafData.forEach(d => {
+      leafElements.push(createLeaf(d.x, d.y, d.rot, d.scale, d.isMemory, d.memType, d.memory));
+    });
+  }
+
+  /* ===== WATER ===== */
+  document.getElementById('btnWater').addEventListener('click', () => {
+    waterCount++;
+    updateStats();
+
+    // Water drops
+    for (let i = 0; i < 14; i++) {
+      const d = document.createElement('div');
+      d.className = 'particle drop-p';
+      d.style.left = rand(120, 360) + 'px';
+      d.style.top = rand(20, 90) + 'px';
+      d.style.animationDelay = (i * 0.05) + 's';
+      treeWrap.appendChild(d);
+      setTimeout(() => d.remove(), 1500);
+    }
+
+    // Glow particles around canopy
+    for (let i = 0; i < 10; i++) {
+      const s = document.createElement('div');
+      s.className = 'particle glow-p';
+      const wrapW = treeWrap.offsetWidth;
+      const wrapH = treeWrap.offsetHeight;
+      const px = rand(150, 350);
+      const py = rand(80, 320);
+      s.style.left = (px / 500 * wrapW) + 'px';
+      s.style.top = (py / 560 * wrapH) + 'px';
+      s.style.setProperty('--tx', rand(-40, 40) + 'px');
+      s.style.setProperty('--ty', rand(-50, -15) + 'px');
+      treeWrap.appendChild(s);
+      setTimeout(() => s.remove(), 1000);
+    }
+
+    // Re-render tree with new scale + new leaves
+    renderAll();
+  });
+
+  /* ===== SHAKE ===== */
+  function performShake() {
+    const memLeaves = leafElements.filter(l => l.memory);
+    if (memLeaves.length === 0) return;
+    const target = memLeaves[randInt(0, memLeaves.length)];
+    const mem = target.memory;
+
+    // Tree sway
+    treeSvg.style.transition = 'transform 0.7s ease-in-out';
+    treeSvg.style.transform = 'rotate(-1.5deg)';
+    setTimeout(() => treeSvg.style.transform = 'rotate(1deg)', 180);
+    setTimeout(() => treeSvg.style.transform = 'rotate(-0.5deg)', 360);
+    setTimeout(() => { treeSvg.style.transform = ''; treeSvg.style.transition = ''; }, 700);
+
+    // Falling leaf clone (match current leaf visual)
+    const rect = target.el.getBoundingClientRect();
+    const clone = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    clone.setAttribute('class', 'falling-leaf');
+    clone.setAttribute('viewBox', '-4 -28 8 32');
+    clone.style.width = '24px';
+    clone.style.height = '28px';
+    clone.style.left = (rect.left + rect.width / 2 - 12) + 'px';
+    clone.style.top = rect.top + 'px';
+    const color = getLeafColor(waterCount, true, mem.type);
+    clone.innerHTML = `
+      <line x1="0" y1="0" x2="0" y2="2" stroke="#5c4a3a" stroke-width="0.6" opacity="0.4"/>
+      <path d="M0,0 C2.5,-7 4,-15 0,-24 C-4,-15 -2.5,-7 0,0" fill="${color}" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.15))"/>
+      <circle cy="-12" r="2" fill="#fff" opacity="0.6"/>
+    `;
+    document.body.appendChild(clone);
+
+    requestAnimationFrame(() => {
+      clone.style.transition = 'all 1.8s cubic-bezier(0.55, 0.055, 0.675, 0.19)';
+      clone.style.transform = `translateY(${window.innerHeight - rect.top + 30}px) rotate(${rand(200, 500)}deg) scale(0.5)`;
+      clone.style.opacity = '0';
+    });
+
+    target.el.style.opacity = '0.15';
+    setTimeout(() => target.el.style.opacity = '1', 2000);
+    setTimeout(() => { clone.remove(); openDetail(mem); }, 1800);
+  }
+
+  document.getElementById('btnShake').addEventListener('click', performShake);
+
+  let lastShake = 0;
+  if (window.DeviceMotionEvent) {
+    window.addEventListener('devicemotion', (e) => {
+      const acc = e.accelerationIncludingGravity;
+      if (!acc) return;
+      const total = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
+      if (total > 22 && Date.now() - lastShake > 2000) {
+        lastShake = Date.now();
+        performShake();
+      }
+    });
+  }
+
+  /* ===== MEMORIES ===== */
+  function addMemory(obj) {
+    const mem = Object.assign({ id: nextId++ }, obj);
+    memories.push(mem);
+    updateStats();
+    renderList();
+    // Scroll memory list to top to show newest
+    const list = document.getElementById('memoryList');
+    if (list) list.scrollTop = 0;
+    if (mainScreen.classList.contains('active')) renderAll();
+    return mem;
+  }
+
+  function renderList() {
+    const list = document.getElementById('memoryList');
+    if (memories.length === 0) {
+      list.innerHTML = '<div style="text-align:center;color:#b5b0a8;padding:28px 0;font-size:12px;letter-spacing:1px;">还没有回忆，快去记录第一段吧</div>';
+      return;
+    }
+    list.innerHTML = memories.slice().reverse().map(m => {
+      let media = '';
+      if (m.type === 'photo' && m.fileUrl) media = `<img class="preview" src="${m.fileUrl}" alt="">`;
+      else if (m.type === 'video' && m.fileUrl) media = `<video class="preview-video" src="${m.fileUrl}" muted playsinline></video>`;
+      const tagMap = { text: '文字', photo: '照片', video: '视频' };
+      return `
+        <div class="memory-item" data-id="${m.id}">
+          ${media}
+          <div class="text">${escapeHtml(m.title || m.content)}</div>
+          <div class="meta">
+            <span class="tag">${tagMap[m.type] || '文字'}</span>
+            <span>${m.date}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+    list.querySelectorAll('.memory-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const mem = memories.find(m => m.id === parseInt(el.dataset.id));
+        if (mem) openDetail(mem);
+      });
+    });
+  }
+
+  /* ===== UPLOAD ===== */
+  const uploadModal = document.getElementById('uploadModal');
+  const inputTitle = document.getElementById('inputTitle');
+  const inputContent = document.getElementById('inputContent');
+  const inputFile = document.getElementById('inputFile');
+  const filePreviewBox = document.getElementById('filePreviewBox');
+  let currentFileUrl = null, currentFileType = null;
+
+  document.getElementById('btnUpload').addEventListener('click', () => {
+    inputTitle.value = ''; inputContent.value = ''; inputFile.value = '';
+    filePreviewBox.innerHTML = ''; currentFileUrl = null; currentFileType = null;
+    uploadModal.classList.add('show');
+  });
+  document.getElementById('btnCancelUpload').addEventListener('click', () => uploadModal.classList.remove('show'));
+  uploadModal.addEventListener('click', e => { if (e.target === uploadModal) uploadModal.classList.remove('show'); });
+
+  inputFile.addEventListener('change', () => {
+    const file = inputFile.files[0];
+    if (!file) return;
+    currentFileUrl = URL.createObjectURL(file);
+    currentFileType = file.type.startsWith('video') ? 'video' : 'photo';
+    if (currentFileType === 'video') {
+      filePreviewBox.innerHTML = `<video class="file-preview" src="${currentFileUrl}" muted playsinline controls></video>`;
+    } else {
+      filePreviewBox.innerHTML = `<img class="file-preview" src="${currentFileUrl}" alt="preview">`;
+    }
+  });
+
+  document.getElementById('btnConfirmUpload').addEventListener('click', () => {
+    const title = inputTitle.value.trim();
+    const content = inputContent.value.trim();
+    if (!content && !currentFileUrl) {
+      inputContent.style.borderColor = '#d4a5a5';
+      setTimeout(() => inputContent.style.borderColor = '', 800);
+      return;
+    }
+    const type = currentFileType || 'text';
+    addMemory({ title, content, type, date: fmtDate(new Date()), fileUrl: currentFileUrl });
+    uploadModal.classList.remove('show');
+  });
+
+  /* ===== DETAIL ===== */
+  const detailModal = document.getElementById('detailModal');
+  document.getElementById('btnCloseDetail').addEventListener('click', () => detailModal.classList.remove('show'));
+  detailModal.addEventListener('click', e => { if (e.target === detailModal) detailModal.classList.remove('show'); });
+
+  function openDetail(memory) {
+    document.getElementById('detailTitle').textContent = memory.title || '回忆详情';
+    const mediaBox = document.getElementById('detailMedia');
+    mediaBox.innerHTML = '';
+    if (memory.type === 'photo' && memory.fileUrl) mediaBox.innerHTML = `<img class="detail-media" src="${memory.fileUrl}" alt="">`;
+    else if (memory.type === 'video' && memory.fileUrl) mediaBox.innerHTML = `<video class="detail-media" src="${memory.fileUrl}" controls playsinline></video>`;
+    document.getElementById('detailText').textContent = memory.content || '';
+    document.getElementById('detailDate').textContent = memory.date;
+    detailModal.classList.add('show');
+  }
+
+  /* ===== INIT ===== */
+  initDemo();
+  updateStats();
+})();
+</script>
+</body>
+</html>
