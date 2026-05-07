@@ -16,7 +16,7 @@
 - **大模型**：Kimi Code API
 - **前端**：HTML5, CSS3, JavaScript, SVG/Canvas
 - **动画库**：GSAP
-- **数据存储**：Firebase / Supabase
+- **数据存储**：Supabase
 
 ## 使用方法
 1. 打开 `index.html` 文件，即可查看网页原型
